@@ -1,0 +1,54 @@
+<policies>
+    <inbound>
+        <base />
+        <set-variable name="accessKey" value="{{storageAccountAccessKey}}" />
+        <set-variable name="storageAccount" value="{{storageAccount}}" />
+        <set-variable name="x-ms-date" value="@(DateTime.UtcNow.ToString("R"))" />
+        <set-variable name="containerName" value="{{ containerName }}" />
+
+        <set-variable name="fileName" value="@((string)context.Request.MatchedParameters["name"])" />
+
+        <set-header name="Accept-Charset" exists-action="override">
+            <value>UTF-8</value>
+        </set-header>
+        <set-header name="x-ms-date" exists-action="override">
+            <value>@((string)context.Variables["x-ms-date"])</value>
+        </set-header>
+        <set-header name="x-ms-version" exists-action="override">
+            <value>2015-04-05</value>
+        </set-header>
+
+        <set-variable name="CanonicalizedResource" value="@{
+            return string.Format("/{0}/{1}/{2}",
+            (string)context.Variables["storageAccount"],
+            (string)context.Variables["containerName"],
+            (string)context.Variables["fileName"]);
+            }" />
+
+        <set-variable name="StringToSign" value="@{
+                return string.Format(
+                "PUT\n\n{0}\n{1}\n{2}",
+                (string)context.Request.Headers["Content-Type"],
+                (string)context.Variables["x-ms-date"],
+                (string)context.Variables["CanonicalizedResource"]);
+            }" />
+
+        <set-variable name="SharedKey" value="@{
+                System.Security.Cryptography.HMACSHA256 hasher = new System.Security.Cryptography.HMACSHA256(Convert.FromBase64String((string)context.Variables["accessKey"]));
+                return Convert.ToBase64String(hasher.ComputeHash(System.Text.Encoding.UTF8.GetBytes((string)context.Variables["StringToSign"])));
+            }" />
+
+        <set-header name="Authorization" exists-action="override">
+            <value>@(string.Format("SharedKey {0}:{1}", (string)context.Variables["storageAccount"], (string)context.Variables["SharedKey"]))</value>
+        </set-header>
+    </inbound>
+    <backend>
+        <base />
+    </backend>
+    <outbound>
+        <base />
+    </outbound>
+    <on-error>
+        <base />
+    </on-error>
+</policies>
